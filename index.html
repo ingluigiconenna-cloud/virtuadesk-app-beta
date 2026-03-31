@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VirtuaDesk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #0e1117;
+  --bg2:         #161b25;
+  --bg3:         #1e2533;
+  --border:      #2a3347;
+  --border2:     #3a4a63;
+  --text:        #d4daea;
+  --text2:       #7e8fa8;
+  --text3:       #4a5670;
+  --accent:      #3b7cf4;
+  --accent-glow: rgba(59,124,244,0.18);
+  --accent2:     #22d3a8;
+  --danger:      #f04b4b;
+  --win-bar:     #12171f;
+  --win-bg:      #0e1117;
+  --taskbar-h:   44px;
+  --radius:      10px;
+  --font:        'IBM Plex Sans', system-ui, sans-serif;
+  --mono:        'IBM Plex Mono', monospace;
+  --transition:  0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Wallpaper / Desktop ──────────────────────────────────────────────────── */
+#desktop {
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 80%, rgba(59,124,244,0.07) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 50% at 80% 20%, rgba(34,211,168,0.05) 0%, transparent 65%),
+    #0e1117;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  overflow: hidden;
+  transition: background 0.6s ease;
+}
+
+/* Grid pattern overlay */
+#desktop::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(59,124,244,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,124,244,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+#desktop.has-image::before { opacity: 0; }
+
+/* ── Wallpaper Panel ──────────────────────────────────────────────────────── */
+#wallpaper-panel {
+  position: fixed; inset: 0;
+  z-index: 7000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+#wallpaper-panel.show { opacity: 1; pointer-events: all; }
+
+.wp-card {
+  width: 680px; max-width: 96vw;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.7);
+  animation: wpAppear 0.22s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+@keyframes wpAppear {
+  from { transform: scale(0.93) translateY(16px); opacity: 0; }
+  to   { transform: scale(1)    translateY(0);    opacity: 1; }
+}
+.wp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+}
+.wp-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.wp-close {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text2); cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition);
+}
+.wp-close:hover { background: rgba(240,75,75,0.15); border-color: var(--danger); color: var(--danger); }
+
+.wp-tabs {
+  display: flex; gap: 4px; padding: 12px 20px 0;
+}
+.wp-tab {
+  padding: 6px 14px; border-radius: 6px 6px 0 0;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  border: 1px solid transparent; border-bottom: none;
+  color: var(--text2); background: transparent;
+  transition: all var(--transition);
+}
+.wp-tab.active { background: var(--bg); border-color: var(--border); color: var(--text); }
+.wp-tab:not(.active):hover { color: var(--text); }
+
+.wp-body { padding: 20px; }
+
+.wp-section-title {
+  font-size: 11px; font-weight: 600; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+.wp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.wp-thumb {
+  aspect-ratio: 16/9;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.15s;
+  position: relative; overflow: hidden;
+}
+.wp-thumb:hover { transform: scale(1.04); border-color: var(--border2); }
+.wp-thumb.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.wp-thumb-label {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 4px 6px;
+  background: rgba(0,0,0,0.55);
+  font-size: 9px; color: #fff;
+  text-align: center; letter-spacing: 0.04em;
+  opacity: 0; transition: opacity 0.15s;
+}
+.wp-thumb:hover .wp-thumb-label { opacity: 1; }
+
+.wp-upload-zone {
+  border: 2px dashed var(--border2);
+  border-radius: 10px;
+  padding: 28px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-bottom: 16px;
+}
+.wp-upload-zone:hover, .wp-upload-zone.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+.wp-upload-icon { font-size: 28px; margin-bottom: 8px; }
+.wp-upload-text { font-size: 13px; color: var(--text2); }
+.wp-upload-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+.wp-colors {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;
+}
+.wp-color-swatch {
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.15s;
+}
+.wp-color-swatch:hover { transform: scale(1.1); }
+.wp-color-swatch.selected { border-color: white; box-shadow: 0 0 0 3px var(--accent); }
+
+.wp-custom-color {
+  display: flex; align-items: center; gap: 10px; margin-top: 8px;
+}
+.wp-custom-color label { font-size: 12px; color: var(--text2); }
+.wp-custom-color input[type=color] {
+  width: 36px; height: 36px; border-radius: 6px;
+  border: 1px solid var(--border2); cursor: pointer;
+  background: transparent; padding: 2px;
+}
+
+.wp-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg3);
+}
+.wp-btn {
+  padding: 8px 18px; border-radius: 7px;
+  font-family: var(--font); font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all var(--transition); border: none;
+}
+.wp-btn-cancel {
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text2);
+}
+.wp-btn-cancel:hover { border-color: var(--border2); color: var(--text); }
+.wp-btn-apply {
+  background: var(--accent); color: white;
+}
+.wp-btn-apply:hover { background: #4f8ff7; box-shadow: 0 4px 16px rgba(59,124,244,0.35); }
+
+/* ── Settings Panel ───────────────────────────────────────────────────────── */
+#settings-panel {
+  position: fixed; bottom: calc(var(--taskbar-h) + 8px); right: 12px;
+  width: 220px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  z-index: 6000;
+  padding: 10px 0;
+  opacity: 0; transform: translateY(8px) scale(0.97);
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+}
+#settings-panel.show { opacity: 1; transform: translateY(0) scale(1); pointer-events: all; }
+.sp-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; font-size: 13px;
+  color: var(--text2); cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.sp-item:hover { background: var(--bg3); color: var(--text); }
+.sp-item-icon { font-size: 15px; width: 20px; text-align: center; }
+.sp-sep { height: 1px; background: var(--border); margin: 5px 0; }
+.sp-label { padding: 4px 14px 2px; font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ── Login Screen ─────────────────────────────────────────────────────────── */
+#login-screen {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #080b10;
+  z-index: 9999;
+  transition: opacity 0.5s, visibility 0.5s;
+}
+#login-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+.login-card {
+  width: 380px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  padding: 40px 36px 36px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(59,124,244,0.08);
+  animation: loginAppear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes loginAppear {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.login-logo {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 32px;
+}
+.login-logo-icon {
+  width: 38px; height: 38px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.login-logo-text {
+  font-size: 18px; font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+.login-logo-text span { color: var(--accent); }
+
+.login-title {
+  font-size: 22px; font-weight: 600;
+  margin-bottom: 6px; letter-spacing: -0.4px;
+}
+.login-sub {
+  color: var(--text2); font-size: 13px;
+  margin-bottom: 28px; line-height: 1.5;
+}
+
+.login-label {
+  display: block;
+  font-size: 11px; font-weight: 500;
+  color: var(--text2);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.login-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  margin-bottom: 20px;
+}
+.login-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.login-input::placeholder { color: var(--text3); }
+
+.login-btn {
+  width: 100%;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  font-family: var(--font);
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+  position: relative; overflow: hidden;
+}
+.login-btn:hover {
+  background: #4f8ff7;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(59,124,244,0.35);
+}
+.login-btn:active { transform: translateY(0); }
+.login-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+.login-error {
+  background: rgba(240,75,75,0.12);
+  border: 1px solid rgba(240,75,75,0.3);
+  color: #f47;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-top: 14px;
+  display: none;
+}
+.login-error.show { display: block; }
+
+/* ── Taskbar ──────────────────────────────────────────────────────────────── */
+#taskbar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: var(--taskbar-h);
+  background: rgba(14,17,23,0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 16px;
+  gap: 8px;
+  z-index: 500;
+}
+
+.taskbar-logo {
+  display: flex; align-items: center; gap: 8px;
+  margin-right: 8px; padding-right: 16px;
+  border-right: 1px solid var(--border);
+}
+.taskbar-logo-icon {
+  width: 24px; height: 24px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+}
+.taskbar-logo-text {
+  font-size: 12px; font-weight: 600;
+  color: var(--text2); letter-spacing: 0.05em;
+}
+
+.taskbar-btn {
+  height: 30px; padding: 0 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text2);
+  font-family: var(--font); font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+  display: flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.taskbar-btn:hover { background: var(--bg3); border-color: var(--border); color: var(--text); }
+.taskbar-btn.active { background: var(--bg3); border-color: var(--accent); color: var(--accent); }
+
+.taskbar-spacer { flex: 1; }
+
+.taskbar-clock {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--text2);
+  padding: 0 8px;
+  text-align: right;
+}
+.taskbar-user {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px;
+  border-left: 1px solid var(--border);
+  font-size: 12px; color: var(--text2);
+}
+.taskbar-user-dot {
+  width: 7px; height: 7px;
+  background: var(--accent2);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--accent2);
+}
+
+.taskbar-logout {
+  height: 28px; padding: 0 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text3);
+  font-family: var(--font); font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.taskbar-logout:hover { border-color: var(--danger); color: var(--danger); background: rgba(240,75,75,0.07); }
+
+/* ── Desktop Icons ────────────────────────────────────────────────────────── */
+#icon-grid {
+  position: fixed;
+  top: 20px; left: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 88px);
+  grid-auto-rows: 88px;
+  gap: 8px;
+  padding: 8px;
+  max-height: calc(100vh - var(--taskbar-h) - 40px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+#icon-grid::-webkit-scrollbar { display: none; }
+
+.desk-icon {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 6px;
+  padding: 10px 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition);
+  border: 1px solid transparent;
+  position: relative;
+}
+.desk-icon:hover {
+  background: rgba(59,124,244,0.12);
+  border-color: rgba(59,124,244,0.2);
+  transform: translateY(-2px);
+}
+.desk-icon.selected {
+  background: rgba(59,124,244,0.2);
+  border-color: rgba(59,124,244,0.4);
+}
+
+.desk-icon-img {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  position: relative;
+}
+
+.desk-icon-label {
+  font-size: 11px; font-weight: 400;
+  color: var(--text);
+  text-align: center;
+  line-height: 1.3;
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+
+/* Icon type colors */
+.icon-html { background: linear-gradient(135deg, #e34c26, #f06529); }
+.icon-js   { background: linear-gradient(135deg, #f0db4f, #e7a320); }
+.icon-css  { background: linear-gradient(135deg, #264de4, #2965f1); }
+.icon-pdf  { background: linear-gradient(135deg, #e63946, #c1121f); }
+.icon-img  { background: linear-gradient(135deg, #06d6a0, #048a81); }
+.icon-xls  { background: linear-gradient(135deg, #1d6f42, #21a366); }
+.icon-doc  { background: linear-gradient(135deg, #185abd, #2b7cd3); }
+.icon-txt  { background: linear-gradient(135deg, #4a5568, #718096); }
+.icon-json { background: linear-gradient(135deg, #805ad5, #553c9a); }
+.icon-zip  { background: linear-gradient(135deg, #d69e2e, #b7791f); }
+.icon-gen  { background: linear-gradient(135deg, #4a5568, #2d3748); }
+
+/* Loading state for icons */
+.icon-loading { opacity: 0; animation: iconFadeIn 0.3s ease forwards; }
+@keyframes iconFadeIn {
+  to { opacity: 1; }
+}
+
+/* ── Window Manager ───────────────────────────────────────────────────────── */
+#windows-layer {
+  position: fixed;
+  inset: 0 0 var(--taskbar-h) 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.vd-window {
+  position: absolute;
+  background: var(--win-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
+  display: flex; flex-direction: column;
+  pointer-events: all;
+  transition: box-shadow var(--transition), border-color var(--transition);
+  min-width: 400px; min-height: 300px;
+}
+.vd-window.focused {
+  border-color: var(--border2);
+  box-shadow: 0 32px 100px rgba(0,0,0,0.8), 0 0 0 1px rgba(59,124,244,0.15);
+  z-index: 200 !important;
+}
+
+.win-bar {
+  height: 36px;
+  background: var(--win-bar);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 10px;
+  gap: 8px;
+  cursor: grab; flex-shrink: 0;
+  user-select: none;
+}
+.win-bar:active { cursor: grabbing; }
+
+.win-controls {
+  display: flex; gap: 6px; align-items: center;
+  flex-shrink: 0;
+}
+.win-btn {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: none; cursor: pointer;
+  transition: opacity var(--transition), transform var(--transition);
+  flex-shrink: 0;
+}
+.win-btn:hover { opacity: 0.8; transform: scale(1.1); }
+.win-btn-close  { background: #ff5f57; }
+.win-btn-min    { background: #febc2e; }
+.win-btn-max    { background: #28c840; }
+
+.win-title {
+  flex: 1;
+  font-size: 12px; font-weight: 500;
+  color: var(--text2);
+  text-align: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 0 40px;
+}
+
+.win-addressbar {
+  display: flex; align-items: center;
+  padding: 6px 10px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  gap: 8px; flex-shrink: 0;
+}
+.win-nav-btn {
+  width: 26px; height: 26px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text2);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition);
+}
+.win-nav-btn:hover { border-color: var(--border2); color: var(--text); }
+.win-nav-btn:disabled { opacity: 0.3; cursor: default; }
+.win-url {
+  flex: 1;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.win-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: white; /* iframe content */
+}
+.win-content iframe {
+  width: 100%; height: 100%;
+  border: none;
+  background: white;
+}
+
+.win-loading {
+  position: absolute; inset: 0;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px;
+  z-index: 10;
+}
+.win-loading.hidden { display: none; }
+.loading-spinner {
+  width: 32px; height: 32px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 13px; color: var(--text2); }
+
+/* Resize handle */
+.win-resize {
+  position: absolute; bottom: 0; right: 0;
+  width: 16px; height: 16px;
+  cursor: se-resize;
+  background: transparent;
+}
+.win-resize::after {
+  content: '';
+  position: absolute; bottom: 4px; right: 4px;
+  width: 8px; height: 8px;
+  border-right: 2px solid var(--border2);
+  border-bottom: 2px solid var(--border2);
+}
+
+/* Minimized state */
+.vd-window.minimized {
+  opacity: 0;
+  transform: scale(0.8) translateY(30px);
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+/* ── Context Menu ─────────────────────────────────────────────────────────── */
+#ctx-menu {
+  position: fixed;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 160px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  z-index: 9000;
+  display: none;
+}
+#ctx-menu.show { display: block; }
+
+#ctx-desktop {
+  position: fixed;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 190px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  z-index: 9000;
+  display: none;
+}
+#ctx-desktop.show { display: block; }
+.ctx-item {
+  padding: 7px 12px;
+  border-radius: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text);
+  transition: background var(--transition);
+}
+.ctx-item:hover { background: var(--bg3); }
+.ctx-item.danger { color: var(--danger); }
+.ctx-sep { height: 1px; background: var(--border); margin: 3px 0; }
+
+/* ── Notification Toast ───────────────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 58px; right: 16px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--text);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 8000;
+  opacity: 0; transform: translateY(10px);
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none;
+  max-width: 280px;
+}
+#toast.show { opacity: 1; transform: translateY(0); }
+
+/* ── Loading overlay (app init) ───────────────────────────────────────────── */
+#init-overlay {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 20px;
+  z-index: 8500;
+  transition: opacity 0.4s;
+}
+#init-overlay.hidden { opacity: 0; pointer-events: none; }
+.init-logo {
+  font-size: 32px; font-weight: 600;
+  letter-spacing: -1px;
+  background: linear-gradient(135deg, #3b7cf4, #22d3a8);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.init-bar {
+  width: 180px; height: 2px;
+  background: var(--border);
+  border-radius: 2px; overflow: hidden;
+}
+.init-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 2px;
+  animation: initLoad 0.8s ease-in-out forwards;
+}
+@keyframes initLoad { from { width: 0; } to { width: 100%; } }
+.init-text { font-size: 12px; color: var(--text3); font-family: var(--mono); }
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+#empty-state {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center; display: none;
+  pointer-events: none;
+}
+#empty-state.show { display: block; }
+.empty-icon { font-size: 48px; opacity: 0.15; margin-bottom: 12px; }
+.empty-text { color: var(--text3); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- ── Init overlay ──────────────────────────────────────────────────────── -->
+<div id="init-overlay">
+  <div class="init-logo">VirtuaDesk</div>
+  <div class="init-bar"><div class="init-bar-fill"></div></div>
+  <div class="init-text">Inizializzazione...</div>
+</div>
+
+<!-- ── Login screen ───────────────────────────────────────────────────────── -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">🖥</div>
+      <div class="login-logo-text">Virtua<span>Desk</span></div>
+    </div>
+    <div class="login-title">Accesso</div>
+    <div class="login-sub">Inserisci il token di accesso fornito dal tuo amministratore.</div>
+    <label class="login-label" for="token-input">Token di accesso</label>
+    <input class="login-input" id="token-input" type="password"
+           placeholder="Incolla il tuo token qui..."
+           autocomplete="off" spellcheck="false">
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Accedi</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ── Desktop ────────────────────────────────────────────────────────────── -->
+<div id="desktop">
+  <div id="icon-grid"></div>
+  <div id="empty-state">
+    <div class="empty-icon">📂</div>
+    <div class="empty-text">Nessun file trovato nel repository</div>
+  </div>
+</div>
+
+<!-- ── Windows layer ──────────────────────────────────────────────────────── -->
+<div id="windows-layer"></div>
+
+<!-- ── Taskbar ────────────────────────────────────────────────────────────── -->
+<div id="taskbar">
+  <div class="taskbar-logo">
+    <div class="taskbar-logo-icon">🖥</div>
+    <div class="taskbar-logo-text">VirtuaDesk</div>
+  </div>
+  <div id="taskbar-windows"></div>
+  <div class="taskbar-spacer"></div>
+  <div class="taskbar-user">
+    <div class="taskbar-user-dot"></div>
+    <span id="taskbar-username">—</span>
+  </div>
+  <div class="taskbar-clock" id="taskbar-clock" style="text-align:right;line-height:1.3;">
+    <div id="taskbar-time" style="font-size:12px;">00:00</div>
+    <div id="taskbar-date" style="font-size:10px;color:var(--text3);">—</div>
+  </div>
+  <button class="taskbar-logout" onclick="toggleSettingsPanel(event)" title="Impostazioni" style="padding:0 8px;font-size:15px;border:1px solid var(--border);">⚙️</button>
+  <button class="taskbar-logout" onclick="doLogout()">Esci</button>
+</div>
+
+<!-- ── Context menu (file) ─────────────────────────────────────────────────── -->
+<div id="ctx-menu">
+  <div class="ctx-item" id="ctx-open" onclick="ctxOpen()">🔓 Apri</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="ctxInfo()">ℹ Info file</div>
+</div>
+
+<!-- ── Context menu (desktop) ─────────────────────────────────────────────── -->
+<div id="ctx-desktop">
+  <div class="ctx-item" onclick="openWallpaperPanel(); hideCtxDesktop();">🖼 Cambia sfondo</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="refreshDesktop(); hideCtxDesktop();">🔄 Aggiorna desktop</div>
+</div>
+
+<!-- ── Settings panel ─────────────────────────────────────────────────────── -->
+<div id="settings-panel">
+  <div class="sp-label">Aspetto</div>
+  <div class="sp-item" onclick="openWallpaperPanel(); closeSettingsPanel();">
+    <span class="sp-item-icon">🖼</span> Sfondo desktop
+  </div>
+  <div class="sp-sep"></div>
+  <div class="sp-label">Sistema</div>
+  <div class="sp-item" onclick="refreshDesktop(); closeSettingsPanel();">
+    <span class="sp-item-icon">🔄</span> Aggiorna file
+  </div>
+  <div class="sp-sep"></div>
+  <div class="sp-item" onclick="doLogout();" style="color:var(--danger);">
+    <span class="sp-item-icon">🚪</span> Disconnetti
+  </div>
+</div>
+
+<!-- ── Wallpaper panel ─────────────────────────────────────────────────────── -->
+<div id="wallpaper-panel">
+  <div class="wp-card">
+    <div class="wp-header">
+      <span class="wp-title">🖼 Sfondo Desktop</span>
+      <button class="wp-close" onclick="closeWallpaperPanel()">✕</button>
+    </div>
+    <div class="wp-tabs">
+      <button class="wp-tab active" onclick="switchWpTab('gradients', this)">Gradienti</button>
+      <button class="wp-tab" onclick="switchWpTab('solid', this)">Tinta unita</button>
+      <button class="wp-tab" onclick="switchWpTab('upload', this)">Immagine</button>
+    </div>
+    <div class="wp-body">
+      <!-- Tab Gradienti -->
+      <div id="wp-tab-gradients">
+        <div class="wp-section-title">Sfondi predefiniti</div>
+        <div class="wp-grid" id="wp-gradient-grid"></div>
+      </div>
+      <!-- Tab Tinta unita -->
+      <div id="wp-tab-solid" style="display:none">
+        <div class="wp-section-title">Colori solidi</div>
+        <div class="wp-colors" id="wp-solid-grid"></div>
+        <div class="wp-custom-color">
+          <label for="wp-custom-color-input">Colore personalizzato:</label>
+          <input type="color" id="wp-custom-color-input" value="#0e1117"
+                 oninput="selectCustomColor(this.value)">
+        </div>
+      </div>
+      <!-- Tab Upload -->
+      <div id="wp-tab-upload" style="display:none">
+        <div class="wp-upload-zone" id="wp-drop-zone" onclick="document.getElementById('wp-file-input').click()">
+          <div class="wp-upload-icon">📁</div>
+          <div class="wp-upload-text">Clicca o trascina un'immagine qui</div>
+          <div class="wp-upload-sub">PNG, JPG, WEBP, GIF — max 10 MB</div>
+        </div>
+        <input type="file" id="wp-file-input" accept="image/*" style="display:none" onchange="handleWpUpload(this)">
+        <div id="wp-preview-wrap" style="display:none; margin-top:10px;">
+          <div class="wp-section-title">Anteprima</div>
+          <img id="wp-preview-img" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:160px;object-fit:cover;">
+        </div>
+      </div>
+    </div>
+    <div class="wp-footer">
+      <button class="wp-btn wp-btn-cancel" onclick="closeWallpaperPanel()">Annulla</button>
+      <button class="wp-btn wp-btn-apply" onclick="applyWallpaper()">✓ Applica</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ──────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ─── CONFIGURAZIONE ──────────────────────────────────────────────────────────
+// ⚠️  Sostituisci con l'URL del tuo Cloudflare Worker dopo il deploy
+const WORKER_URL = 'https://virtuadesk-v1.ing-luigiconenna.workers.dev';
+
+// ─── Stato globale ───────────────────────────────────────────────────────────
+const STATE = {
+  sessionToken: null,
+  username: null,
+  files: [],
+  windows: [],
+  nextZIndex: 100,
+  ctxTarget: null,
+};
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = sessionStorage.getItem('vd_token');
+  if (saved) {
+    STATE.sessionToken = saved;
+    STATE.username = sessionStorage.getItem('vd_user') || 'Utente';
+    validateAndBoot();
+  } else {
+    document.getElementById('init-overlay').classList.add('hidden');
+    // login screen è visibile di default
+  }
+
+  // Enter sul campo token
+  document.getElementById('token-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  // Clock
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // Click su desktop: deseleziona icone + chiudi panels
+  document.getElementById('desktop').addEventListener('click', () => {
+    document.querySelectorAll('.desk-icon.selected').forEach(el => el.classList.remove('selected'));
+    hideCtxMenu();
+    hideCtxDesktop();
+    closeSettingsPanel();
+  });
+
+  // Context menu desktop (tasto destro sul desktop)
+  document.getElementById('desktop').addEventListener('contextmenu', e => {
+    if (e.target.closest('.desk-icon')) return; // gestito dall'icona
+    e.preventDefault(); e.stopPropagation();
+    hideCtxMenu();
+    showCtxDesktop(e.clientX, e.clientY);
+  });
+
+  // Context menu: nasconde al click ovunque
+  document.addEventListener('click', () => { hideCtxMenu(); hideCtxDesktop(); });
+  document.addEventListener('contextmenu', e => {
+    if (!e.target.closest('#ctx-desktop') && !e.target.closest('#ctx-menu') && !e.target.closest('.desk-icon'))
+      e.preventDefault();
+  });
+
+  // Ripristina wallpaper salvato
+  restoreWallpaper();
+
+  // Inizializza pannello wallpaper
+  initWallpaperPanel();
+
+  // Drag & drop upload
+  const dropZone = document.getElementById('wp-drop-zone');
+  if (dropZone) {
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault(); dropZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) previewWpFile(file);
+    });
+  }
+});
+
+// ─── LOGIN ───────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const token = document.getElementById('token-input').value.trim();
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-error');
+
+  if (!token) { showLoginError('Inserisci il token di accesso.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Verifica in corso...';
+  errEl.classList.remove('show');
+
+  try {
+    const res = await fetch(`${WORKER_URL}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      showLoginError(data.error || 'Accesso negato.');
+      btn.disabled = false; btn.textContent = 'Accedi';
+      return;
+    }
+
+    STATE.sessionToken = data.sessionToken;
+    STATE.username = data.user;
+    sessionStorage.setItem('vd_token', data.sessionToken);
+    sessionStorage.setItem('vd_user', data.user);
+
+    bootDesktop();
+  } catch (e) {
+    showLoginError('Impossibile contattare il server. Riprova.');
+    btn.disabled = false; btn.textContent = 'Accedi';
+  }
+}
+
+async function validateAndBoot() {
+  try {
+    const res = await apiFetch('/api/session');
+    if (res.valid) {
+      STATE.username = res.user;
+      bootDesktop();
+    } else {
+      clearSession();
+    }
+  } catch {
+    clearSession();
+  }
+}
+
+// ─── BOOT ────────────────────────────────────────────────────────────────────
+async function bootDesktop() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('taskbar-username').textContent = STATE.username;
+
+  // Carica file
+  try {
+    const data = await apiFetch('/api/files');
+    STATE.files = data.files || [];
+    renderIcons();
+  } catch {
+    showToast('Errore nel caricamento dei file.');
+  }
+
+  setTimeout(() => document.getElementById('init-overlay').classList.add('hidden'), 400);
+}
+
+// ─── ICONE DESKTOP ───────────────────────────────────────────────────────────
+function renderIcons() {
+  const grid = document.getElementById('icon-grid');
+  const empty = document.getElementById('empty-state');
+  grid.innerHTML = '';
+
+  if (!STATE.files.length) { empty.classList.add('show'); return; }
+  empty.classList.remove('show');
+
+  STATE.files.forEach((file, i) => {
+    const el = document.createElement('div');
+    el.className = 'desk-icon icon-loading';
+    el.style.animationDelay = `${i * 40}ms`;
+    el.dataset.idx = i;
+
+    const iconClass = getIconClass(file.ext);
+    const emoji = getIconEmoji(file.ext);
+
+    el.innerHTML = `
+      <div class="desk-icon-img ${iconClass}">${emoji}</div>
+      <div class="desk-icon-label" title="${file.name}">${file.name}</div>
+    `;
+
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      document.querySelectorAll('.desk-icon.selected').forEach(x => x.classList.remove('selected'));
+      el.classList.add('selected');
+      hideCtxMenu();
+    });
+
+    el.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      openFile(file);
+    });
+
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault(); e.stopPropagation();
+      el.classList.add('selected');
+      STATE.ctxTarget = file;
+      showCtxMenu(e.clientX, e.clientY);
+    });
+
+    grid.appendChild(el);
+  });
+}
+
+// ─── APERTURA FILE (finestra browser integrato) ───────────────────────────────
+let windowSeq = 0;
+
+function openFile(file) {
+  windowSeq++;
+  const wid = `win-${windowSeq}`;
+  const fileUrl = `${WORKER_URL}/api/file/${encodeURIComponent(file.path)}`;
+
+  // Dimensioni iniziali
+  const w = Math.min(window.innerWidth - 80, 1000);
+  const h = Math.min(window.innerHeight - 100, 700);
+  const x = 40 + (windowSeq % 6) * 28;
+  const y = 20 + (windowSeq % 5) * 22;
+
+  const winEl = document.createElement('div');
+  winEl.className = 'vd-window focused';
+  winEl.id = wid;
+  winEl.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${++STATE.nextZIndex}`;
+
+  winEl.innerHTML = `
+    <div class="win-bar" id="bar-${wid}">
+      <div class="win-controls">
+        <button class="win-btn win-btn-close"  onclick="closeWindow('${wid}')" title="Chiudi"></button>
+        <button class="win-btn win-btn-min"    onclick="minimizeWindow('${wid}')" title="Minimizza"></button>
+        <button class="win-btn win-btn-max"    onclick="maximizeWindow('${wid}')" title="Massimizza"></button>
+      </div>
+      <div class="win-title">${file.name}</div>
+    </div>
+    <div class="win-addressbar">
+      <button class="win-nav-btn" disabled title="Indietro">←</button>
+      <button class="win-nav-btn" disabled title="Avanti">→</button>
+      <button class="win-nav-btn" onclick="reloadWindow('${wid}')" title="Ricarica">↻</button>
+      <div class="win-url" id="url-${wid}">${file.path}</div>
+    </div>
+    <div class="win-content" id="content-${wid}">
+      <div class="win-loading" id="loading-${wid}">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Caricamento in corso...</div>
+      </div>
+      <iframe id="iframe-${wid}" src="" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
+              onload="onIframeLoad('${wid}')"></iframe>
+    </div>
+    <div class="win-resize" id="resize-${wid}"></div>
+  `;
+
+  document.getElementById('windows-layer').appendChild(winEl);
+
+  // Salva in stato
+  STATE.windows.push({ id: wid, file, el: winEl, minimized: false, maximized: false, prevRect: null, url: fileUrl });
+
+  // Carica iframe con il token nell'header non è possibile, usiamo blob per HTML
+  loadFileInIframe(wid, file, fileUrl);
+
+  // Drag
+  makeDraggable(winEl, document.getElementById(`bar-${wid}`));
+  // Resize
+  makeResizable(winEl, document.getElementById(`resize-${wid}`));
+  // Focus click
+  winEl.addEventListener('mousedown', () => focusWindow(wid));
+
+  // Aggiorna taskbar
+  addTaskbarBtn(wid, file.name);
+  focusWindow(wid);
+}
+
+async function loadFileInIframe(wid, file, fileUrl) {
+  try {
+    const res = await fetch(fileUrl, {
+      headers: { Authorization: `Bearer ${STATE.sessionToken}` },
+    });
+
+    if (!res.ok) {
+      showIframeError(wid, `Errore ${res.status}: impossibile caricare il file.`);
+      return;
+    }
+
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const iframe = document.getElementById(`iframe-${wid}`);
+    if (iframe) iframe.src = blobUrl;
+  } catch (e) {
+    showIframeError(wid, 'Errore di rete durante il caricamento.');
+  }
+}
+
+function showIframeError(wid, msg) {
+  const loading = document.getElementById(`loading-${wid}`);
+  if (loading) {
+    loading.innerHTML = `<div style="color:#f47;font-size:13px;text-align:center;padding:20px">${msg}</div>`;
+  }
+}
+
+function onIframeLoad(wid) {
+  const loading = document.getElementById(`loading-${wid}`);
+  if (loading) loading.classList.add('hidden');
+}
+
+function reloadWindow(wid) {
+  const win = STATE.windows.find(w => w.id === wid);
+  if (!win) return;
+  document.getElementById(`loading-${wid}`)?.classList.remove('hidden');
+  const iframe = document.getElementById(`iframe-${wid}`);
+  if (iframe) { iframe.src = ''; loadFileInIframe(wid, win.file, win.url); }
+}
+
+// ─── WINDOW MANAGEMENT ───────────────────────────────────────────────────────
+function focusWindow(wid) {
+  document.querySelectorAll('.vd-window').forEach(w => w.classList.remove('focused'));
+  const win = document.getElementById(wid);
+  if (win) {
+    win.classList.add('focused');
+    win.style.zIndex = ++STATE.nextZIndex;
+  }
+  document.querySelectorAll('.taskbar-btn').forEach(b => b.classList.remove('active'));
+  const tbBtn = document.getElementById(`tb-${wid}`);
+  if (tbBtn) tbBtn.classList.add('active');
+}
+
+function closeWindow(wid) {
+  const win = document.getElementById(wid);
+  if (win) {
+    win.style.opacity = '0'; win.style.transform = 'scale(0.9)';
+    win.style.transition = 'opacity 0.15s, transform 0.15s';
+    setTimeout(() => {
+      win.remove();
+      STATE.windows = STATE.windows.filter(w => w.id !== wid);
+      document.getElementById(`tb-${wid}`)?.remove();
+    }, 150);
+  }
+}
+
+function minimizeWindow(wid) {
+  const win = document.getElementById(wid);
+  if (win) {
+    win.classList.toggle('minimized');
+    const tbBtn = document.getElementById(`tb-${wid}`);
+    if (tbBtn) tbBtn.classList.toggle('active', !win.classList.contains('minimized'));
+  }
+}
+
+function maximizeWindow(wid) {
+  const win = document.getElementById(wid);
+  const state = STATE.windows.find(w => w.id === wid);
+  if (!win || !state) return;
+  if (state.maximized) {
+    // Restore
+    const r = state.prevRect;
+    win.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;z-index:${win.style.zIndex};border-radius:var(--radius)`;
+    state.maximized = false;
+  } else {
+    state.prevRect = { left: win.offsetLeft, top: win.offsetTop, width: win.offsetWidth, height: win.offsetHeight };
+    const tb = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--taskbar-h'));
+    win.style.cssText = `left:0;top:0;width:${window.innerWidth}px;height:${window.innerHeight - tb}px;z-index:${win.style.zIndex};border-radius:0`;
+    state.maximized = true;
+  }
+}
+
+// ─── DRAG ────────────────────────────────────────────────────────────────────
+function makeDraggable(win, bar) {
+  let dragging = false, ox = 0, oy = 0;
+  bar.addEventListener('mousedown', e => {
+    if (e.target.classList.contains('win-btn')) return;
+    dragging = true; ox = e.clientX - win.offsetLeft; oy = e.clientY - win.offsetTop;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const maxX = window.innerWidth - win.offsetWidth;
+    const maxY = window.innerHeight - win.offsetHeight - 44;
+    win.style.left = Math.max(0, Math.min(e.clientX - ox, maxX)) + 'px';
+    win.style.top  = Math.max(0, Math.min(e.clientY - oy, maxY)) + 'px';
+  });
+  document.addEventListener('mouseup', () => { dragging = false; });
+}
+
+// ─── RESIZE ──────────────────────────────────────────────────────────────────
+function makeResizable(win, handle) {
+  let resizing = false, startX, startY, startW, startH;
+  handle.addEventListener('mousedown', e => {
+    resizing = true;
+    startX = e.clientX; startY = e.clientY;
+    startW = win.offsetWidth; startH = win.offsetHeight;
+    e.preventDefault(); e.stopPropagation();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!resizing) return;
+    win.style.width  = Math.max(400, startW + e.clientX - startX) + 'px';
+    win.style.height = Math.max(300, startH + e.clientY - startY) + 'px';
+  });
+  document.addEventListener('mouseup', () => { resizing = false; });
+}
+
+// ─── TASKBAR WINDOW BUTTONS ───────────────────────────────────────────────────
+function addTaskbarBtn(wid, name) {
+  const btn = document.createElement('button');
+  btn.className = 'taskbar-btn active';
+  btn.id = `tb-${wid}`;
+  btn.title = name;
+  const short = name.length > 18 ? name.substring(0, 16) + '…' : name;
+  btn.textContent = short;
+  btn.onclick = () => {
+    const win = document.getElementById(wid);
+    if (!win) return;
+    if (win.classList.contains('minimized')) {
+      win.classList.remove('minimized');
+      focusWindow(wid);
+    } else if (win.classList.contains('focused')) {
+      minimizeWindow(wid);
+    } else {
+      focusWindow(wid);
+    }
+  };
+  document.getElementById('taskbar-windows').appendChild(btn);
+}
+
+// ─── CONTEXT MENU ─────────────────────────────────────────────────────────────
+function showCtxMenu(x, y) {
+  const menu = document.getElementById('ctx-menu');
+  menu.classList.add('show');
+  menu.style.left = Math.min(x, window.innerWidth - 180) + 'px';
+  menu.style.top  = Math.min(y, window.innerHeight - 80) + 'px';
+}
+function hideCtxMenu() { document.getElementById('ctx-menu').classList.remove('show'); }
+function ctxOpen() { if (STATE.ctxTarget) openFile(STATE.ctxTarget); hideCtxMenu(); }
+function ctxInfo() {
+  if (!STATE.ctxTarget) return;
+  const f = STATE.ctxTarget;
+  showToast(`📄 ${f.name} · ${f.ext.toUpperCase()} · ${formatSize(f.size)}`);
+  hideCtxMenu();
+}
+
+// ─── API HELPER ───────────────────────────────────────────────────────────────
+async function apiFetch(endpoint) {
+  const res = await fetch(`${WORKER_URL}${endpoint}`, {
+    headers: { Authorization: `Bearer ${STATE.sessionToken}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    if (res.status === 401) { clearSession(); return; }
+    throw new Error(data.error || 'Errore API');
+  }
+  return data;
+}
+
+// ─── SESSION ──────────────────────────────────────────────────────────────────
+function clearSession() {
+  sessionStorage.removeItem('vd_token');
+  sessionStorage.removeItem('vd_user');
+  STATE.sessionToken = null;
+  location.reload();
+}
+
+function doLogout() {
+  clearSession();
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg; el.classList.add('show');
+}
+
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function updateClock() {
+  const now = new Date();
+  const h = now.getHours().toString().padStart(2, '0');
+  const m = now.getMinutes().toString().padStart(2, '0');
+  const days = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  const months = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  const dayName = days[now.getDay()];
+  const date = `${dayName} ${now.getDate()} ${months[now.getMonth()]}`;
+  const timeEl = document.getElementById('taskbar-time');
+  const dateEl = document.getElementById('taskbar-date');
+  if (timeEl) timeEl.textContent = `${h}:${m}`;
+  if (dateEl) dateEl.textContent = date;
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '—';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+// ─── ICON HELPERS ─────────────────────────────────────────────────────────────
+function getIconClass(ext) {
+  const m = {
+    html:'icon-html', htm:'icon-html',
+    js:'icon-js', mjs:'icon-js',
+    css:'icon-css',
+    pdf:'icon-pdf',
+    png:'icon-img', jpg:'icon-img', jpeg:'icon-img', gif:'icon-img', svg:'icon-img', webp:'icon-img',
+    xls:'icon-xls', xlsx:'icon-xls', csv:'icon-xls',
+    doc:'icon-doc', docx:'icon-doc',
+    txt:'icon-txt', md:'icon-txt',
+    json:'icon-json',
+    zip:'icon-zip', rar:'icon-zip', gz:'icon-zip',
+  };
+  return m[ext] || 'icon-gen';
+}
+
+function getIconEmoji(ext) {
+  const m = {
+    html:'🌐', htm:'🌐',
+    js:'⚡', mjs:'⚡',
+    css:'🎨',
+    pdf:'📕',
+    png:'🖼', jpg:'🖼', jpeg:'🖼', gif:'🎞', svg:'✏️', webp:'🖼',
+    xls:'📊', xlsx:'📊', csv:'📊',
+    doc:'📘', docx:'📘',
+    txt:'📄', md:'📄',
+    json:'🗄',
+    zip:'📦', rar:'📦', gz:'📦',
+  };
+  return m[ext] || '📁';
+}
+
+
+// ─── DESKTOP CONTEXT MENU ────────────────────────────────────────────────────
+function showCtxDesktop(x, y) {
+  const menu = document.getElementById('ctx-desktop');
+  menu.classList.add('show');
+  menu.style.left = Math.min(x, window.innerWidth - 200) + 'px';
+  menu.style.top  = Math.min(y, window.innerHeight - 100) + 'px';
+}
+function hideCtxDesktop() { document.getElementById('ctx-desktop')?.classList.remove('show'); }
+
+function refreshDesktop() {
+  if (STATE.sessionToken) {
+    apiFetch('/api/files').then(data => {
+      STATE.files = data.files || [];
+      renderIcons();
+      showToast('🔄 Desktop aggiornato');
+    }).catch(() => showToast('Errore aggiornamento.'));
+  }
+}
+
+// ─── SETTINGS PANEL ──────────────────────────────────────────────────────────
+function toggleSettingsPanel(e) {
+  e.stopPropagation();
+  const p = document.getElementById('settings-panel');
+  p.classList.toggle('show');
+}
+function closeSettingsPanel() {
+  document.getElementById('settings-panel')?.classList.remove('show');
+}
+
+// ─── WALLPAPER SYSTEM ────────────────────────────────────────────────────────
+const WP_GRADIENTS = [
+  { name: 'Notte cosmica',    css: 'radial-gradient(ellipse 60% 40% at 20% 80%, rgba(59,124,244,0.12) 0%, transparent 70%), radial-gradient(ellipse 50% 50% at 80% 20%, rgba(34,211,168,0.08) 0%, transparent 65%), #0e1117' },
+  { name: 'Aurora boreale',   css: 'linear-gradient(135deg, #0d1b2a 0%, #1b3a4b 30%, #0a4a3a 65%, #0d1b2a 100%)' },
+  { name: 'Tramonto viola',   css: 'linear-gradient(160deg, #1a0533 0%, #2d1b69 35%, #7b2d8b 70%, #c0392b 100%)' },
+  { name: 'Oceano profondo',  css: 'linear-gradient(180deg, #020c1b 0%, #0a3055 50%, #0e4d6d 100%)' },
+  { name: 'Foresta oscura',   css: 'linear-gradient(145deg, #0b1a0d 0%, #1a3a1c 50%, #0d2a0f 100%)' },
+  { name: 'Rosso neon',       css: 'radial-gradient(ellipse at 30% 70%, rgba(200,30,60,0.25) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(255,80,30,0.15) 0%, transparent 55%), #150a0a' },
+  { name: 'Grigio acciaio',   css: 'linear-gradient(135deg, #1c1c1e 0%, #2c2c2e 50%, #1c1c1e 100%)' },
+  { name: 'Cielo all\'alba',  css: 'linear-gradient(180deg, #0d0d1a 0%, #1a1040 30%, #3d1a5c 60%, #7a2d3a 85%, #c47a4a 100%)' },
+];
+
+const WP_SOLIDS = [
+  '#0e1117','#111827','#1a1a2e','#16213e','#0f3460',
+  '#1a0533','#0a1628','#111111','#0d1b0d','#2c1810',
+  '#1c1917','#12161c','#242424','#0a0a0a','#1e1b2e',
+];
+
+let wpState = { type: null, value: null, tab: 'gradients' };
+
+function initWallpaperPanel() {
+  // Build gradient grid
+  const grid = document.getElementById('wp-gradient-grid');
+  WP_GRADIENTS.forEach((g, i) => {
+    const el = document.createElement('div');
+    el.className = 'wp-thumb';
+    el.dataset.idx = i;
+    el.style.background = g.css;
+    el.innerHTML = `<div class="wp-thumb-label">${g.name}</div>`;
+    el.addEventListener('click', () => {
+      grid.querySelectorAll('.wp-thumb').forEach(t => t.classList.remove('selected'));
+      el.classList.add('selected');
+      wpState = { type: 'gradient', value: g.css };
+    });
+    grid.appendChild(el);
+  });
+
+  // Build solid grid
+  const solidGrid = document.getElementById('wp-solid-grid');
+  WP_SOLIDS.forEach(color => {
+    const sw = document.createElement('div');
+    sw.className = 'wp-color-swatch';
+    sw.style.background = color;
+    sw.title = color;
+    sw.addEventListener('click', () => {
+      solidGrid.querySelectorAll('.wp-color-swatch').forEach(s => s.classList.remove('selected'));
+      sw.classList.add('selected');
+      wpState = { type: 'solid', value: color };
+      document.getElementById('wp-custom-color-input').value = color;
+    });
+    solidGrid.appendChild(sw);
+  });
+}
+
+function selectCustomColor(val) {
+  document.querySelectorAll('.wp-color-swatch').forEach(s => s.classList.remove('selected'));
+  wpState = { type: 'solid', value: val };
+}
+
+function switchWpTab(tab, btn) {
+  ['gradients','solid','upload'].forEach(t => {
+    document.getElementById(`wp-tab-${t}`).style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('.wp-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  wpState.tab = tab;
+}
+
+function openWallpaperPanel() {
+  document.getElementById('wallpaper-panel').classList.add('show');
+}
+function closeWallpaperPanel() {
+  document.getElementById('wallpaper-panel').classList.remove('show');
+  // reset preview state
+  wpState = { type: null, value: null, tab: wpState.tab };
+}
+
+function handleWpUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  previewWpFile(file);
+}
+
+function previewWpFile(file) {
+  if (file.size > 10 * 1024 * 1024) { showToast('⚠️ Immagine troppo grande (max 10 MB)'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    wpState = { type: 'image', value: dataUrl };
+    const wrap = document.getElementById('wp-preview-wrap');
+    const img  = document.getElementById('wp-preview-img');
+    wrap.style.display = '';
+    img.src = dataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+function applyWallpaper() {
+  if (!wpState.type) { showToast('⚠️ Seleziona prima uno sfondo.'); return; }
+  const desk = document.getElementById('desktop');
+
+  if (wpState.type === 'gradient') {
+    desk.style.background = wpState.value;
+    desk.style.backgroundSize = 'cover';
+    desk.classList.remove('has-image');
+    localStorage.setItem('vd_wallpaper', JSON.stringify({ type: 'gradient', value: wpState.value }));
+  } else if (wpState.type === 'solid') {
+    desk.style.background = wpState.value;
+    desk.classList.remove('has-image');
+    localStorage.setItem('vd_wallpaper', JSON.stringify({ type: 'solid', value: wpState.value }));
+  } else if (wpState.type === 'image') {
+    desk.style.background = `url('${wpState.value}') center/cover no-repeat`;
+    desk.classList.add('has-image');
+    // Salva dataUrl solo se abbastanza piccola (evita quota localStorage)
+    try {
+      localStorage.setItem('vd_wallpaper', JSON.stringify({ type: 'image', value: wpState.value }));
+    } catch (e) {
+      // Se troppo grande per localStorage, salviamo solo il fatto che c'era un'immagine
+      localStorage.setItem('vd_wallpaper', JSON.stringify({ type: 'image-nocache', value: null }));
+    }
+  }
+
+  showToast('✅ Sfondo aggiornato');
+  closeWallpaperPanel();
+}
+
+function restoreWallpaper() {
+  try {
+    const saved = localStorage.getItem('vd_wallpaper');
+    if (!saved) return;
+    const wp = JSON.parse(saved);
+    const desk = document.getElementById('desktop');
+    if (wp.type === 'gradient') {
+      desk.style.background = wp.value;
+      desk.classList.remove('has-image');
+    } else if (wp.type === 'solid') {
+      desk.style.background = wp.value;
+      desk.classList.remove('has-image');
+    } else if (wp.type === 'image' && wp.value) {
+      desk.style.background = `url('${wp.value}') center/cover no-repeat`;
+      desk.classList.add('has-image');
+    }
+  } catch (e) { /* ignora errori parsing */ }
+}
+
+</script>
+</body>
+</html>
